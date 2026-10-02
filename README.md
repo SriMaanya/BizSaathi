@@ -269,7 +269,7 @@ Output:
 🤖 AI Business Advisor
 <img width="1917" height="972" alt="image" src="https://github.com/user-attachments/assets/b4fe4fe8-a1c5-442d-a66a-5c58d35c435c" />
 
-🛠️ Technology Stack
+# 🛠️ Technology Stack
 Frontend
 React
 Vite
@@ -333,7 +333,7 @@ Individuals planning to start a business
 Entrepreneurs who prefer regional languages.
 
 
- ⚙️ Setup & Installation
+## ⚙️ Setup & Installation
 
  1. Clone the repository
 
