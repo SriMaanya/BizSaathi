@@ -6,6 +6,8 @@ BizSaathi is an AI-powered, multilingual business advisory platform designed to 
 
 Instead of providing generic business advice, BizSaathi uses the entrepreneur's business context — such as business type, budget, location, goals, and experience — to generate personalized and actionable guidance.
 
+Live Demo: https://biz-saathi-eight.vercel.app/
+
 ---
 
 ## 🌟 Why BizSaathi?
@@ -222,6 +224,164 @@ Users have access to a settings/profile area where they can manage their account
                      │ PostgreSQL   │  │ Gemini API   │
                      │ Database     │  │              │
                      └──────────────┘  └──────────────┘
+                            
+                            User
+                              │
+                              ▼
+                            Landing Page
+                              │
+                              ▼
+                            Register / Login
+                              │
+                              ▼
+                            Business Onboarding
+                              │
+                              ├── Business Type
+                              ├── Budget
+                              ├── Location
+                              ├── Goal
+                              └── Business Stage
+                              │
+                              ▼
+                            Business Context
+                              │
+                              ▼
+                            AI Business Advisor
+                              │
+                              ├── User Query
+                              ├── Business Context
+                              └── Selected Language
+                              │
+                              ▼
+                            Gemini AI
+                              │
+                              ▼
+                            Personalized Response
+                              │
+                              ▼
+                            Conversation History
 
+Output:
+🏠 Landing Page
+<img width="1917" height="968" alt="image" src="https://github.com/user-attachments/assets/5eadc6bd-4fbf-44ef-a4d7-ba012fe1dfe8" />
+💼 Business Dashboard
+<img width="1917" height="911" alt="image" src="https://github.com/user-attachments/assets/0f1d1bf9-6302-4f11-b842-644c999dab26" />
+🤖 AI Business Advisor
+<img width="1917" height="972" alt="image" src="https://github.com/user-attachments/assets/b4fe4fe8-a1c5-442d-a66a-5c58d35c435c" />
 
+🛠️ Technology Stack
+Frontend
+React
+Vite
+JavaScript
+CSS
+Axios
+React Icons
+Backend
+Python
+FastAPI
+Pydantic
+SQLAlchemy
+JWT Authentication
+Database
+PostgreSQL
+AI
+Google Gemini API
+Deployment
+Vercel — Frontend
+Render — Backend
+PostgreSQL — Database
+Development
+Git
+GitHub
+VS Code
 
+🌐 Deployment
+
+BizSaathi is deployed as a full-stack application.
+
+Frontend
+
+Vercel
+
+Live application:
+
+https://biz-saathi-eight.vercel.app/
+
+Backend
+
+Render
+
+The FastAPI backend is deployed separately and communicates with the React frontend through REST APIs.
+
+Database
+
+PostgreSQL is used for persistent application data.
+
+AI Service
+
+Google Gemini API powers the AI business advisory functionality.
+
+🧪 Testing
+
+The application was tested across the following areas:
+
+Authentication
+User registration
+User login
+JWT authentication
+Logout
+Protected routes
+Business Context
+New user onboarding
+Existing user context
+Context updates
+Persistent business information
+AI Features
+Business questions
+Personalized responses
+Suggested questions
+Multilingual responses
+Follow-up conversations
+User Experience
+Responsive interface
+Navigation
+Settings
+Conversation history
+Voice interaction
+📊 Project Goals
+
+BizSaathi was designed around the following target metrics:
+
+Metric	Target
+Response Time	< 3 seconds
+Language Accuracy	> 90%
+Actionability	80%+
+Personalization	100%
+User Clarity	90%
+
+These values represent project targets and should be validated through formal testing before being presented as measured results.
+
+🚀 Future Enhancements
+📱 Mobile application
+🗣️ Improved voice-first interaction
+🌐 Support for additional Indian languages
+📊 Business analytics dashboard
+📈 Business growth tracking
+💰 Budget and expense planning
+🔎 Local market insights
+🧾 Business document generation
+🏛️ Verified government scheme information
+🤝 Entrepreneur community features
+📚 Business learning resources
+🎯 Target Users
+
+BizSaathi is designed for:
+
+First-time entrepreneurs
+Small-business owners
+Local business owners
+Home-based businesses
+Students exploring entrepreneurship
+Individuals planning to start a business
+Entrepreneurs who prefer regional languages
