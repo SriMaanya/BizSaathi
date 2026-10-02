@@ -424,17 +424,21 @@ export default function App() {
       setIsContextExpanded(false);
     }
 
+    const aiMessageId = `ai-${Date.now()}`;
+    let aiText = '';
+    let aiMsgCreated = false;
+
     try {
-      // 2. Call backend /chat with optional JWT auth attached via api.chat.send
+      // 2. Call backend /chat with optional JWT auth attached via api.chat.stream
       const recentHistoryPayload = !currentUser && messages.length > 0
-        ? messages.slice(-8).map((m) => ({
+        ? messages.slice(-6).map((m) => ({
             role: m.role || m.sender || 'user',
             content: m.text,
             language: selectedLanguage,
           }))
         : undefined;
 
-      const data = await api.chat.send({
+      const payload = {
         message: trimmed,
         language: selectedLanguage,
         business_type: activeContext.businessType?.trim() || undefined,
@@ -443,26 +447,41 @@ export default function App() {
         goal: activeContext.goal?.trim() || undefined,
         conversation_id: activeConversationId || undefined,
         recent_history: recentHistoryPayload,
-      });
-
-      if (data.conversation_id && !activeConversationId) {
-        setActiveConversationId(data.conversation_id);
-      }
-
-      // If user is authenticated, refresh conversation list in background
-      if (currentUser) {
-        loadBackendConversations(false);
-      }
-
-      // 3. Add AI message from FastAPI Gemini response
-      const aiResponse = {
-        id: `ai-${Date.now()}`,
-        role: 'assistant',
-        sender: 'assistant',
-        text: data.reply,
-        timestamp: formatCurrentTime()
       };
-      setMessages((prev) => [...prev, aiResponse]);
+
+      await api.chat.stream(payload, {
+        onChunk: (chunk) => {
+          aiText += chunk;
+          if (!aiMsgCreated) {
+            aiMsgCreated = true;
+            setIsLoading(false); // First token arrived! Remove loading spinner immediately
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: aiMessageId,
+                role: 'assistant',
+                sender: 'assistant',
+                text: aiText,
+                timestamp: formatCurrentTime()
+              }
+            ]);
+          } else {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === aiMessageId ? { ...m, text: aiText } : m
+              )
+            );
+          }
+        },
+        onDone: (data) => {
+          if (data?.conversation_id && !activeConversationId) {
+            setActiveConversationId(data.conversation_id);
+          }
+          if (currentUser) {
+            loadBackendConversations(false);
+          }
+        }
+      });
     } catch (error) {
       console.error('Backend request failed:', error);
       const errorMessage = {

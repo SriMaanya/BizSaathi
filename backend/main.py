@@ -1,8 +1,11 @@
 import os
+import time
+import json
 import datetime
 from typing import Optional
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Depends
+from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from google import genai
@@ -26,8 +29,11 @@ api_key = os.getenv("GEMINI_API_KEY") or os.getenv("gemini_api_key")
 if not api_key:
     raise ValueError("GEMINI_API_KEY environment variable is not set in backend/.env")
 
-# Initialize Gemini client once at startup
-client = genai.Client(api_key=api_key)
+# Initialize Gemini client once at startup with a 25-second timeout
+client = genai.Client(
+    api_key=api_key,
+    http_options=types.HttpOptions(timeout=25000)
+)
 
 # Initialize the FastAPI application
 app = FastAPI(title="BizSaathi Backend", version="2.0.0")
@@ -97,29 +103,88 @@ LANGUAGE_MAP = {
 def read_root():
     return {"message": "BizSaathi backend is running with Database & Auth support"}
 
-# Helper function to invoke Gemini model with fallback
+# Helper function to get model list prioritizing the fast, high-quota model
+def get_model_list() -> list[str]:
+    configured = os.getenv("GEMINI_MODEL")
+    default_order = ["gemini-3.5-flash-lite", "gemini-flash-lite-latest", "gemini-3.8-flash"]
+    if configured:
+        return [configured] + [m for m in default_order if m != configured]
+    return default_order
+
+# Optimized prompt builder: preserves context while removing token bloat
+def build_chat_prompt(
+    user_message: str,
+    language: str,
+    b_type: Optional[str],
+    b_budget: Optional[str],
+    b_location: Optional[str],
+    b_goal: Optional[str],
+    history_msgs: list
+) -> str:
+    selected_lang_name = LANGUAGE_MAP.get(language.lower(), language)
+    prompt_parts = [f"[User's Selected Response Language: {selected_lang_name} ({language})]"]
+
+    # Only include business context fields that actually have values
+    ctx_fields = []
+    if b_type and b_type.strip():
+        ctx_fields.append(f"- Business Type: {b_type.strip()}")
+    if b_budget and b_budget.strip():
+        ctx_fields.append(f"- Budget: {b_budget.strip()}")
+    if b_location and b_location.strip():
+        ctx_fields.append(f"- Location: {b_location.strip()}")
+    if b_goal and b_goal.strip():
+        ctx_fields.append(f"- Goal: {b_goal.strip()}")
+
+    if ctx_fields:
+        prompt_parts.append("Business Context:\n" + "\n".join(ctx_fields))
+
+    if history_msgs:
+        formatted = []
+        for m in history_msgs:
+            role = getattr(m, "role", None) or (m.get("role") if isinstance(m, dict) else "user")
+            content = getattr(m, "content", None) or (m.get("content") if isinstance(m, dict) else "")
+            content = (content or "").strip()
+            sender = "User" if role == "user" else "BizSaathi"
+            # Trim older assistant messages to 400 chars to avoid prompt bloat
+            if sender == "BizSaathi" and len(content) > 400:
+                content = content[:400] + "..."
+            formatted.append(f"{sender}: {content}")
+        prompt_parts.append("Previous Conversation Context:\n" + "\n".join(formatted))
+
+    prompt_parts.append(f"User Question:\n{user_message}")
+    return "\n\n".join(prompt_parts)
+
+# Helper function to invoke Gemini model with fallback and exponential backoff
 def call_gemini(prompt: str) -> str:
     config = types.GenerateContentConfig(
         system_instruction=SYSTEM_INSTRUCTION,
         temperature=0.7,
+        max_output_tokens=1024,
     )
     last_error = None
-    for model in ["gemini-3.5-flash", "gemini-3.8-flash", "gemini-3.5-flash-lite"]:
-        try:
-            response = client.models.generate_content(
-                model=model,
-                contents=prompt,
-                config=config,
-            )
-            if response and response.text:
-                return response.text.strip()
-        except Exception as err:
-            last_error = err
-            continue
+    for model in get_model_list():
+        for attempt in range(2):
+            try:
+                response = client.models.generate_content(
+                    model=model,
+                    contents=prompt,
+                    config=config,
+                )
+                if response and response.text:
+                    return response.text.strip()
+            except Exception as err:
+                last_error = err
+                err_str = str(err)
+                code = getattr(err, "code", None)
+                # Retry once with backoff only on 429/503 temporary errors
+                if (code in (429, 503) or "429" in err_str or "503" in err_str) and attempt == 0:
+                    time.sleep(0.5)
+                    continue
+                break  # On normal errors or 2nd attempt, switch to next fallback model
 
     raise last_error or Exception("No response generated from Gemini API.")
 
-# Core Chat endpoint: supports authenticated user persistence + guest preview
+# Core Chat endpoint: supports authenticated user persistence + guest preview + streaming
 @app.post("/chat", response_model=schemas.ChatResponse)
 @app.post("/api/chat", response_model=schemas.ChatResponse)
 def chat_endpoint(
@@ -131,33 +196,27 @@ def chat_endpoint(
     if not user_message:
         raise HTTPException(status_code=400, detail="Message cannot be empty.")
 
-    selected_lang_name = LANGUAGE_MAP.get(request.language.lower(), request.language)
+    # 1. Determine Business Context
+    b_type = request.business_type
+    b_budget = request.budget
+    b_location = request.location
+    b_goal = request.goal
 
-    # 1. Determine Business Context (use DB profile if authenticated and not overridden)
-    b_type = None
-    b_budget = None
-    b_location = None
-    b_goal = None
-
-    conv = None
-    if current_user:
-        # Fetch DB profile
+    # Only query DB profile if authenticated and ANY context field is missing
+    if current_user and not (b_type and b_budget and b_location and b_goal):
         db_profile = db.query(models.BusinessProfile).filter(
             models.BusinessProfile.user_id == current_user.id
         ).first()
-
         if db_profile:
-            b_type = request.business_type or db_profile.business_type
-            b_budget = request.budget or db_profile.budget
-            b_location = request.location or db_profile.location
-            b_goal = request.goal or db_profile.goal
-        else:
-            b_type = request.business_type
-            b_budget = request.budget
-            b_location = request.location
-            b_goal = request.goal
+            b_type = b_type or db_profile.business_type
+            b_budget = b_budget or db_profile.budget
+            b_location = b_location or db_profile.location
+            b_goal = b_goal or db_profile.goal
 
-        # 2. Get or create conversation container for the user
+    # 2. Conversation & History handling
+    conv = None
+    history_msgs = []
+    if current_user:
         if request.conversation_id:
             target_conv = db.query(models.Conversation).filter(
                 models.Conversation.id == request.conversation_id
@@ -174,15 +233,24 @@ def chat_endpoint(
             title = generate_conversation_title(user_message)
             conv = models.Conversation(user_id=current_user.id, title=title or "General Advice")
             db.add(conv)
-            db.commit()
-            db.refresh(conv)
+            db.flush()  # Assigns conv.id without a separate disk fsync round-trip
         elif conv.title in (None, "", "General Advice", "Saved Journey", "New Conversation"):
             title = generate_conversation_title(user_message)
             if title and title != "General Advice":
                 conv.title = title
-                conv.updated_at = datetime.datetime.utcnow()
+                conv.updated_at = datetime.datetime.now(datetime.timezone.utc)
 
-        # 3. Save user message to database
+        # Fetch prior messages (last 6 turns)
+        history_msgs = (
+            db.query(models.Message)
+            .filter(models.Message.conversation_id == conv.id)
+            .order_by(models.Message.created_at.desc())
+            .limit(6)
+            .all()
+        )
+        history_msgs.reverse()
+
+        # Save user message to database in a single commit with conversation
         db_user_msg = models.Message(
             conversation_id=conv.id,
             role="user",
@@ -191,53 +259,86 @@ def chat_endpoint(
         )
         db.add(db_user_msg)
         db.commit()
+    elif request.recent_history:
+        history_msgs = request.recent_history[-6:]
 
-        # 4. Fetch prior messages from this conversation for context continuity (last 8 turns)
-        history_msgs = (
-            db.query(models.Message)
-            .filter(
-                models.Message.conversation_id == conv.id,
-                models.Message.id != db_user_msg.id
+    prompt = build_chat_prompt(
+        user_message=user_message,
+        language=request.language,
+        b_type=b_type,
+        b_budget=b_budget,
+        b_location=b_location,
+        b_goal=b_goal,
+        history_msgs=history_msgs,
+    )
+
+    # 3. If streaming requested: return SSE stream
+    if request.stream:
+        def stream_generator():
+            config = types.GenerateContentConfig(
+                system_instruction=SYSTEM_INSTRUCTION,
+                temperature=0.7,
+                max_output_tokens=1024,
             )
-            .order_by(models.Message.created_at.desc())
-            .limit(8)
-            .all()
+            accumulated_chunks = []
+            models_to_try = get_model_list()
+            stream_started = False
+
+            for model_name in models_to_try:
+                try:
+                    stream = client.models.generate_content_stream(
+                        model=model_name,
+                        contents=prompt,
+                        config=config,
+                    )
+                    for chunk in stream:
+                        if chunk.text:
+                            stream_started = True
+                            accumulated_chunks.append(chunk.text)
+                            yield f"data: {json.dumps({'chunk': chunk.text})}\n\n"
+                    break  # Stream succeeded
+                except Exception as err:
+                    if stream_started:
+                        # Stream failed mid-way, stop cleanly
+                        break
+                    # If failed before starting, try next fallback model
+                    continue
+
+            full_reply = "".join(accumulated_chunks).strip()
+            conv_id = conv.id if conv else None
+
+            # Persist assistant message upon stream completion
+            if current_user and conv and full_reply:
+                try:
+                    db_assistant_msg = models.Message(
+                        conversation_id=conv.id,
+                        role="assistant",
+                        content=full_reply,
+                        language=request.language
+                    )
+                    conv.updated_at = datetime.datetime.now(datetime.timezone.utc)
+                    db.add(db_assistant_msg)
+                    db.commit()
+                except Exception as save_err:
+                    print(f"Error persisting streamed assistant message: {save_err}")
+                    db.rollback()
+
+            yield f"data: {json.dumps({'done': True, 'conversation_id': conv_id})}\n\n"
+
+        return StreamingResponse(
+            stream_generator(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            }
         )
-        history_msgs.reverse()
-    else:
-        b_type = request.business_type
-        b_budget = request.budget
-        b_location = request.location
-        b_goal = request.goal
 
-    # Format fallback text for missing context fields
-    str_type = b_type.strip() if b_type and b_type.strip() else "Not specified"
-    str_budget = b_budget.strip() if b_budget and b_budget.strip() else "Not specified"
-    str_location = b_location.strip() if b_location and b_location.strip() else "Not specified"
-    str_goal = b_goal.strip() if b_goal and b_goal.strip() else "Not specified"
-
-    # Assemble prior conversation history
-    history_text = ""
-    if current_user and conv and history_msgs:
-        history_text = "\n".join([f"{'User' if m.role == 'user' else 'BizSaathi'}: {m.content}" for m in history_msgs])
-    elif not current_user and request.recent_history:
-        history_text = "\n".join([f"{'User' if m.role == 'user' else 'BizSaathi'}: {m.content}" for m in request.recent_history[-8:]])
-
-    # Structure prompt with context, history, and user question
-    prompt_parts = [
-        f"[User's Selected Response Language: {selected_lang_name} ({request.language})]",
-        f"Business Context:\n- Business Type: {str_type}\n- Budget: {str_budget}\n- Location: {str_location}\n- Goal: {str_goal}"
-    ]
-    if history_text:
-        prompt_parts.append(f"Previous Conversation Context:\n{history_text}")
-    prompt_parts.append(f"User Question:\n{user_message}")
-
-    prompt = "\n\n".join(prompt_parts)
-
+    # 4. Standard Non-Streaming response (fallback / automated tests)
     try:
         reply_text = call_gemini(prompt)
 
-        # 4. If authenticated, save assistant response to the conversation
         if current_user and conv:
             db_assistant_msg = models.Message(
                 conversation_id=conv.id,
@@ -245,7 +346,7 @@ def chat_endpoint(
                 content=reply_text,
                 language=request.language
             )
-            conv.updated_at = datetime.datetime.utcnow()
+            conv.updated_at = datetime.datetime.now(datetime.timezone.utc)
             db.add(db_assistant_msg)
             db.commit()
 

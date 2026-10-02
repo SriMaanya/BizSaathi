@@ -133,6 +133,7 @@ class ChatRequest(BaseModel):
     goal: Optional[str] = None
     conversation_id: Optional[int] = None
     recent_history: Optional[List[MessageCreate]] = None
+    stream: Optional[bool] = False
 
 class ChatResponse(BaseModel):
     reply: str

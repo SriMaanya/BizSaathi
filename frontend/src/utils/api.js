@@ -65,9 +65,12 @@ async function apiRequest(path, options = {}) {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
+  const signal = options.signal || (typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(30000) : undefined);
+
   const response = await fetch(url, {
     ...options,
     headers,
+    signal,
   });
 
   if (!response.ok) {
@@ -216,6 +219,91 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(chatPayload),
       });
+    },
+
+    stream: async (chatPayload, { onChunk, onDone }) => {
+      const url = `${API_BASE}/chat`;
+      const token = getStoredToken();
+      const headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'text/event-stream',
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ ...chatPayload, stream: true }),
+      });
+
+      if (!response.ok) {
+        let errorDetail = `Request failed with status ${response.status}`;
+        try {
+          const errData = await response.json();
+          if (errData && errData.detail) {
+            errorDetail = Array.isArray(errData.detail)
+              ? errData.detail.map((d) => d.msg || d).join(', ')
+              : errData.detail;
+          }
+        } catch {}
+        const error = new Error(errorDetail);
+        error.status = response.status;
+        throw error;
+      }
+
+      const contentType = response.headers.get('content-type') || '';
+      // If server returned regular JSON response instead of SSE
+      if (contentType.includes('application/json')) {
+        const data = await response.json();
+        if (data && data.reply) onChunk(data.reply);
+        if (onDone) onDone(data);
+        return data;
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let convId = null;
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (trimmed.startsWith('data: ')) {
+            const jsonStr = trimmed.slice(6);
+            if (!jsonStr) continue;
+            try {
+              const parsed = JSON.parse(jsonStr);
+              if (parsed.chunk) onChunk(parsed.chunk);
+              if (parsed.conversation_id) convId = parsed.conversation_id;
+              if (parsed.error) throw new Error(parsed.error);
+              if (parsed.done && onDone) onDone({ conversation_id: convId });
+            } catch (e) {
+              if (e.message && e.message !== 'Unexpected end of JSON input') {
+                console.warn('Error parsing SSE event:', e);
+              }
+            }
+          }
+        }
+      }
+
+      if (buffer.trim().startsWith('data: ')) {
+        try {
+          const parsed = JSON.parse(buffer.trim().slice(6));
+          if (parsed.chunk) onChunk(parsed.chunk);
+          if (parsed.conversation_id) convId = parsed.conversation_id;
+          if (parsed.done && onDone) onDone({ conversation_id: convId });
+        } catch {}
+      }
+
+      return { conversation_id: convId };
     },
   },
 };
