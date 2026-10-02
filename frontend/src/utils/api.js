@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+const API_BASE = import.meta.env.VITE_API_URL
 export const TOKEN_KEY = 'bizsaathi_auth_token';
 export const USER_KEY = 'bizsaathi_user';
 
