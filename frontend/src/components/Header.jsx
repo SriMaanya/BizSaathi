@@ -19,24 +19,48 @@ export default function Header({
   onToggleTheme,
 }) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isLangOpen, setIsLangOpen] = useState(false);
   const menuRef = useRef(null);
+  const langRef = useRef(null);
   const activeT = t || translations[selectedLanguage] || translations.en;
   const handleClear = onClearChat || onResetChat;
 
-  // Close user dropdown menu when clicking outside
+  // Close dropdown menus when clicking/tapping outside or pressing Escape
   useEffect(() => {
     function handleClickOutside(event) {
       if (menuRef.current && !menuRef.current.contains(event.target)) {
         setIsMenuOpen(false);
       }
+      if (langRef.current && !langRef.current.contains(event.target)) {
+        setIsLangOpen(false);
+      }
     }
-    if (isMenuOpen) {
+    function handleKeyDown(event) {
+      if (event.key === 'Escape') {
+        setIsMenuOpen(false);
+        setIsLangOpen(false);
+      }
+    }
+    if (isMenuOpen || isLangOpen) {
       document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('touchstart', handleClickOutside);
+      document.addEventListener('keydown', handleKeyDown);
     }
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isMenuOpen]);
+  }, [isMenuOpen, isLangOpen]);
+
+  const currentLang = LANGUAGES.find((l) => l.code === selectedLanguage) || LANGUAGES[0];
+
+  const handleSelectLanguage = (langCode) => {
+    if (onLanguageChange) {
+      onLanguageChange(langCode);
+    }
+    setIsLangOpen(false);
+  };
 
   const firstName = currentUser?.name ? currentUser.name.split(' ')[0] : '';
 
@@ -101,21 +125,63 @@ export default function Header({
           </button>
         )}
 
-        {/* Language Selector Dropdown */}
-        <div className="language-selector-container">
-          <span className="lang-icon" aria-hidden="true">🌐</span>
-          <select
-            className="language-select"
-            value={selectedLanguage}
-            onChange={(e) => onLanguageChange && onLanguageChange(e.target.value)}
+        {/* Custom In-Page Language Selector Dropdown */}
+        <div className="language-selector-container" ref={langRef}>
+          <button
+            type="button"
+            className={`language-selector-btn ${isLangOpen ? 'is-open' : ''}`}
+            onClick={() => setIsLangOpen((prev) => !prev)}
+            aria-expanded={isLangOpen}
+            aria-haspopup="listbox"
             aria-label="Select Language"
+            title={`Language: ${currentLang.nativeName || currentLang.label}`}
           >
-            {LANGUAGES.map((lang) => (
-              <option key={lang.code} value={lang.code}>
-                {lang.nativeName}
-              </option>
-            ))}
-          </select>
+            <span className="lang-icon" aria-hidden="true">🌐</span>
+            <span className="lang-current-label">{currentLang.label}</span>
+            <svg
+              className={`lang-chevron-icon ${isLangOpen ? 'is-open' : ''}`}
+              width="10"
+              height="10"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+          </button>
+
+          {isLangOpen && (
+            <div 
+              className="language-dropdown-popover" 
+              role="listbox" 
+              aria-label="Choose Language"
+            >
+              {LANGUAGES.map((lang) => {
+                const isSelected = selectedLanguage === lang.code;
+                return (
+                  <button
+                    key={lang.code}
+                    type="button"
+                    role="option"
+                    aria-selected={isSelected}
+                    className={`lang-option-item ${isSelected ? 'is-selected' : ''}`}
+                    onClick={() => handleSelectLanguage(lang.code)}
+                  >
+                    <span className="lang-option-text">{lang.nativeName}</span>
+                    {isSelected && (
+                      <svg className="lang-option-check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                      </svg>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* New Conversation Button (For Authenticated Users) */}

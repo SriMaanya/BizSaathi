@@ -87,17 +87,19 @@
   flex-shrink: 0;
 }
 
-/* Language Selector Dropdown */
+/* Custom Language Selector Popover */
 .language-selector-container {
   display: flex;
   align-items: center;
-  gap: 5px;
+  position: relative;
   background: var(--bg-card);
   border: 1.5px solid var(--border-light);
   border-radius: var(--radius-full);
-  padding: 4px 8px;
+  padding: 4px 10px;
   transition: all 0.2s ease;
   box-shadow: var(--shadow-xs);
+  cursor: pointer;
+  user-select: none;
 }
 
 .language-selector-container:hover {
@@ -110,30 +112,126 @@
   box-shadow: 0 0 0 2px var(--primary-ring);
 }
 
+.language-selector-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  color: var(--text-main);
+  font-size: 12.5px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  outline: none;
+  line-height: 1;
+  -webkit-tap-highlight-color: transparent;
+}
+
 .lang-icon {
   font-size: 13px;
   line-height: 1;
   display: flex;
   align-items: center;
+  flex-shrink: 0;
 }
 
-.language-select {
-  border: none;
-  background: transparent;
+.lang-current-label {
   font-size: 12.5px;
   font-weight: 600;
   color: var(--text-main);
-  outline: none;
-  cursor: pointer;
-  padding: 0 2px 0 0;
-  font-family: inherit;
+  white-space: nowrap;
 }
 
-.language-select option {
+.lang-chevron-icon {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.lang-chevron-icon.is-open {
+  transform: rotate(180deg);
+  color: var(--primary);
+}
+
+.language-dropdown-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 195px;
   background: var(--bg-card);
-  color: var(--text-main);
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border-light);
+  padding: 6px;
+  z-index: 1100;
+  animation: fadeInDown 0.15s ease-out;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.lang-option-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px 12px;
+  min-height: 38px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: inherit;
   font-size: 13px;
-  padding: 6px 10px;
+  font-weight: 500;
+  color: var(--text-main);
+  text-align: left;
+  transition: all 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.lang-option-item:hover,
+.lang-option-item:focus-visible {
+  background: var(--bg-muted);
+  color: var(--primary);
+}
+
+.lang-option-item.is-selected {
+  background: rgba(13, 148, 136, 0.1);
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.lang-option-text {
+  flex: 1;
+  white-space: nowrap;
+}
+
+.lang-option-check {
+  flex-shrink: 0;
+  color: var(--primary);
+  margin-left: 8px;
+}
+
+/* Dark mode overrides for Language Selector */
+[data-theme="dark"] .language-dropdown-popover {
+  background: var(--bg-card);
+  border-color: var(--border-light);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6);
+}
+
+[data-theme="dark"] .lang-option-item:hover,
+[data-theme="dark"] .lang-option-item:focus-visible {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--primary-light);
+}
+
+[data-theme="dark"] .lang-option-item.is-selected {
+  background: rgba(13, 148, 136, 0.22);
+  color: #2dd4bf;
 }
 
 .header-action-btn {
@@ -1685,8 +1783,8 @@
 
   /* Compact Language Selector */
   .language-selector-container {
-    padding: 2px 6px;
-    max-width: 82px;
+    padding: 2px 8px;
+    max-width: 100px;
     height: 32px;
     gap: 3px;
     flex-shrink: 0;
@@ -1694,27 +1792,35 @@
     position: relative;
   }
 
-  .language-selector-container::after {
-    content: '';
-    position: absolute;
-    top: -6px;
-    bottom: -6px;
-    left: -2px;
-    right: -2px;
+  .language-selector-btn {
+    font-size: 11.5px;
+    gap: 3px;
+    width: 100%;
   }
 
   .lang-icon {
-    font-size: 11px;
+    font-size: 12px;
     flex-shrink: 0;
   }
 
-  .language-select {
-    font-size: 11px;
-    max-width: 54px;
+  .lang-current-label {
+    font-size: 11.5px;
+    max-width: 55px;
     text-overflow: ellipsis;
     overflow: hidden;
     white-space: nowrap;
-    padding: 0;
+  }
+
+  .language-dropdown-popover {
+    top: calc(100% + 6px);
+    right: 0;
+    min-width: 185px;
+  }
+
+  .lang-option-item {
+    min-height: 40px;
+    font-size: 13px;
+    padding: 8px 10px;
   }
 
   /* Header action icon buttons (New Chat & Clear) */
@@ -2027,15 +2133,29 @@
   }
 
   .language-selector-container {
-    padding: 2px 4px;
-    max-width: 74px;
+    padding: 2px 6px;
+    max-width: 86px;
     height: 28px;
     gap: 2px;
   }
 
-  .language-select {
+  .language-selector-btn {
+    font-size: 11px;
+    gap: 2px;
+  }
+
+  .lang-icon {
+    font-size: 11px;
+  }
+
+  .lang-current-label {
     font-size: 10.5px;
-    max-width: 48px;
+    max-width: 46px;
+  }
+
+  .language-dropdown-popover {
+    min-width: 180px;
+    right: 0;
   }
 
   .header-action-btn.auth-nav-btn {
@@ -2116,12 +2236,19 @@
   }
 
   .language-selector-container {
-    max-width: 68px;
+    max-width: 76px;
+    padding: 2px 4px;
   }
 
-  .language-select {
-    max-width: 42px;
+  .lang-current-label {
+    max-width: 38px;
     font-size: 10px;
+  }
+
+  .language-dropdown-popover {
+    right: -4px;
+    min-width: 175px;
+    max-width: calc(100vw - 16px);
   }
 }
 

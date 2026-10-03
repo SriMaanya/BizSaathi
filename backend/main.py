@@ -96,6 +96,7 @@ LANGUAGE_MAP = {
     "hi": "Hindi",
     "ta": "Tamil",
     "kn": "Kannada",
+    "mr": "Marathi",
 }
 
 # Health check endpoint
