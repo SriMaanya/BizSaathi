@@ -269,7 +269,7 @@ Output:
 🤖 AI Business Advisor
 <img width="1917" height="972" alt="image" src="https://github.com/user-attachments/assets/b4fe4fe8-a1c5-442d-a66a-5c58d35c435c" />
 
-🛠️ Technology Stack
+# 🛠️ Technology Stack
 Frontend
 React
 Vite
@@ -322,60 +322,6 @@ AI Service
 
 Google Gemini API powers the AI business advisory functionality.
 
-🧪 Testing
-
-The application was tested across the following areas:
-
-Authentication
-User registration
-User login
-JWT authentication
-Logout
-Protected routes
-Business Context
-New user onboarding
-Existing user context
-Context updates
-Persistent business information
-AI Features
-Business questions
-Personalized responses
-Suggested questions
-Multilingual responses
-Follow-up conversations
-User Experience
-Responsive interface
-Navigation
-Settings
-Conversation history
-Voice interaction
-📊 Project Goals
-
-BizSaathi was designed around the following target metrics:
-
-Metric	Target
-Response Time	< 3 seconds
-Language Accuracy	> 90%
-Actionability	80%+
-Personalization	100%
-User Clarity	90%
-
-These values represent project targets and should be validated through formal testing before being presented as measured results.
-
-🚀 Future Enhancements
-📱 Mobile application
-🗣️ Improved voice-first interaction
-🌐 Support for additional Indian languages
-📊 Business analytics dashboard
-📈 Business growth tracking
-💰 Budget and expense planning
-🔎 Local market insights
-🧾 Business document generation
-🏛️ Verified government scheme information
-🤝 Entrepreneur community features
-📚 Business learning resources
-🎯 Target Users
-
 BizSaathi is designed for:
 
 First-time entrepreneurs
@@ -384,4 +330,36 @@ Local business owners
 Home-based businesses
 Students exploring entrepreneurship
 Individuals planning to start a business
-Entrepreneurs who prefer regional languages
+Entrepreneurs who prefer regional languages.
+
+
+## ⚙️ Setup & Installation
+
+ 1. Clone the repository
+
+git clone https://github.com/YOUR-USERNAME/bizsaathi.git
+cd bizsaathi
+
+ 2. Backend Setup
+
+cd backend
+python -m venv venv
+
+# Windows
+venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+### 3. Configure environment variables
+
+Create a `.env` file inside the backend folder:
+
+GEMINI_API_KEY=your_gemini_api_key
+DATABASE_URL=your_database_url
+SECRET_KEY=your_secret_key
+
+### 4. Frontend Setup
+
+cd frontend
+npm install
