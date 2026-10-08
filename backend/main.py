@@ -193,6 +193,9 @@ def chat_endpoint(
     db: Session = Depends(get_db),
     current_user: Optional[models.User] = Depends(get_optional_user)
 ):
+    _t_request_start = time.time()
+    print("[BizSaathi] Request received")
+
     user_message = request.message.strip()
     if not user_message:
         raise HTTPException(status_code=400, detail="Message cannot be empty.")
@@ -276,6 +279,8 @@ def chat_endpoint(
     # 3. If streaming requested: return SSE stream
     if request.stream:
         def stream_generator():
+            _t_gemini_start = time.time()
+            print("[BizSaathi] Gemini started (streaming)")
             config = types.GenerateContentConfig(
                 system_instruction=SYSTEM_INSTRUCTION,
                 temperature=0.7,
@@ -305,6 +310,9 @@ def chat_endpoint(
                     # If failed before starting, try next fallback model
                     continue
 
+            _t_gemini_elapsed = time.time() - _t_gemini_start
+            print(f"[BizSaathi] Gemini response received (streaming): {_t_gemini_elapsed:.2f}s")
+
             full_reply = "".join(accumulated_chunks).strip()
             conv_id = conv.id if conv else None
 
@@ -324,6 +332,8 @@ def chat_endpoint(
                     print(f"Error persisting streamed assistant message: {save_err}")
                     db.rollback()
 
+            _t_total_elapsed = time.time() - _t_request_start
+            print(f"[BizSaathi] Total request time (streaming): {_t_total_elapsed:.2f}s")
             yield f"data: {json.dumps({'done': True, 'conversation_id': conv_id})}\n\n"
 
         return StreamingResponse(
@@ -338,7 +348,11 @@ def chat_endpoint(
 
     # 4. Standard Non-Streaming response (fallback / automated tests)
     try:
+        print("[BizSaathi] Gemini started")
+        _t_gemini_start = time.time()
         reply_text = call_gemini(prompt)
+        _t_gemini_elapsed = time.time() - _t_gemini_start
+        print(f"[BizSaathi] Gemini response received: {_t_gemini_elapsed:.2f}s")
 
         if current_user and conv:
             db_assistant_msg = models.Message(
@@ -351,6 +365,8 @@ def chat_endpoint(
             db.add(db_assistant_msg)
             db.commit()
 
+        _t_total_elapsed = time.time() - _t_request_start
+        print(f"[BizSaathi] Total request time: {_t_total_elapsed:.2f}s")
         return schemas.ChatResponse(
             reply=reply_text,
             conversation_id=conv.id if conv else None

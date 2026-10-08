@@ -215,13 +215,20 @@ export const api = {
 
   chat: {
     send: async (chatPayload) => {
-      return apiRequest('/chat', {
+      console.log('[BizSaathi] Frontend request started');
+      const _t_start = performance.now();
+      const data = await apiRequest('/chat', {
         method: 'POST',
         body: JSON.stringify(chatPayload),
       });
+      const _t_elapsed = ((performance.now() - _t_start) / 1000).toFixed(2);
+      console.log(`[BizSaathi] Backend response received: ${_t_elapsed}s`);
+      return data;
     },
 
     stream: async (chatPayload, { onChunk, onDone }) => {
+      console.log('[BizSaathi] Frontend request started (streaming)');
+      const _t_stream_start = performance.now();
       const url = `${API_BASE}/chat`;
       const token = getStoredToken();
       const headers = {
@@ -237,6 +244,8 @@ export const api = {
         headers,
         body: JSON.stringify({ ...chatPayload, stream: true }),
       });
+      const _t_first_response = ((performance.now() - _t_stream_start) / 1000).toFixed(2);
+      console.log(`[BizSaathi] Backend first response (HTTP headers): ${_t_first_response}s`);
 
       if (!response.ok) {
         let errorDetail = `Request failed with status ${response.status}`;
@@ -303,6 +312,8 @@ export const api = {
         } catch {}
       }
 
+      const _t_stream_elapsed = ((performance.now() - _t_stream_start) / 1000).toFixed(2);
+      console.log(`[BizSaathi] Backend response received (streaming complete): ${_t_stream_elapsed}s`);
       return { conversation_id: convId };
     },
   },
